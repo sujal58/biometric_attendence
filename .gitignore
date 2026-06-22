@@ -1,0 +1,16 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+
+## Rider / VS Code
+.idea/
+.vscode/
+.claude
+
+## Logs / local
+*.log
+
+## NOTE: NativeLibs\*.dll (the Dahua native SDK) ARE intentionally committed,
+## because the app cannot run without them. Do not ignore that folder.
