@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Wraps the Dahua NetSDK C# interop layer (NetSDK.cs / NetSDKStruct.cs / OriginalSDK.cs,
+    copied verbatim from TrueFace_SDK\NetSDKCS). The namespace inside those files is "NetSDKCS".
+    Targets net8.0-windows + x64 because the underlying native DLLs (dhnetsdk.dll, etc.) are 64-bit
+    Windows libraries. Do NOT switch this to AnyCPU/x86 or the native DLLs fail to load.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- The vendor interop sources were written for .NET Framework 4.0 and trip many benign warnings. -->
+    <NoWarn>$(NoWarn);CS0618;CS0612;CS0414;CS0169;CS0649;CS0108;CS0660;CS0661;CS0067;CA1416;SYSLIB0011</NoWarn>
+  </PropertyGroup>
+
+</Project>
