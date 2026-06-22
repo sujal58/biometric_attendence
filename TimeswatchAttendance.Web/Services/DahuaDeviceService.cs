@@ -67,6 +67,7 @@ public sealed class DahuaDeviceService : BackgroundService
         {
             // 1) Initialise the SDK once for the process.
             NETClient.Init(_disconnectCb, IntPtr.Zero, null);
+            ConfigureSdkDiagnostics();
             NETClient.SetAutoReconnect(_reconnectCb, IntPtr.Zero);
             // 2) Register the global alarm callback BEFORE listening (manual 2.1.6 / 2.2.2).
             NETClient.SetDVRMessCallBack(_alarmCb, IntPtr.Zero);
@@ -87,27 +88,20 @@ public sealed class DahuaDeviceService : BackgroundService
     {
         while (!ct.IsCancellationRequested && _loginId == IntPtr.Zero)
         {
-            IntPtr id;
-            var devInfo = new NET_DEVICEINFO_Ex();
-            lock (_sdkLock)
-            {
-                id = NETClient.LoginWithHighLevelSecurity(
-                    _opt.Ip, (ushort)_opt.Port, _opt.Username, _opt.Password,
-                    EM_LOGIN_SPAC_CAP_TYPE.TCP, IntPtr.Zero, ref devInfo);
-            }
+            IntPtr id = TryLogin(out var method, out var error);
 
             if (id == IntPtr.Zero)
             {
-                var err = NETClient.GetLastError();
-                _connState.LastError = err;
+                _connState.LastError = error;
                 _logger.LogWarning("Device login failed ({Ip}:{Port}): {Error}. Retrying in {Seconds}s.",
-                    _opt.Ip, _opt.Port, err, _opt.LoginRetrySeconds);
+                    _opt.Ip, _opt.Port, error, _opt.LoginRetrySeconds);
                 try { await Task.Delay(TimeSpan.FromSeconds(_opt.LoginRetrySeconds), ct); }
                 catch (OperationCanceledException) { return; }
                 continue;
             }
 
             _loginId = id;
+            _logger.LogInformation("Login succeeded via {Method}.", method);
             ReadVersion(id);
 
             lock (_sdkLock) { NETClient.StartListen(id); }
@@ -116,6 +110,66 @@ public sealed class DahuaDeviceService : BackgroundService
             _connState.LastError = null;
             _logger.LogInformation("Device ONLINE. Serial={Serial} Version={Version}. Listening for attendance punches.",
                 _connState.SerialNo, _connState.SoftwareVersion);
+        }
+    }
+
+    private void ConfigureSdkDiagnostics()
+    {
+        // Bump timeouts (defaults are short: ~5s login wait / 1.5s connect) for slower / Wi-Fi devices.
+        var p = new NET_PARAM
+        {
+            nWaittime = 10000,
+            nConnectTime = 8000,
+            nConnectTryNum = 1,
+            bReserved = new byte[4]
+        };
+        NETClient.SetNetworkParam(p);
+
+        // Turn on the NetSDK's own protocol log so we can see exactly why a login is rejected.
+        try
+        {
+            var logInfo = new NET_LOG_SET_PRINT_INFO
+            {
+                dwSize = (uint)Marshal.SizeOf(typeof(NET_LOG_SET_PRINT_INFO)),
+                bSetFilePath = 1,
+                szLogFilePath = "sdk_log/sdk_log.log"
+            };
+            if (NETClient.LogOpen(logInfo))
+            {
+                _logger.LogInformation("NetSDK diagnostic log enabled at <app folder>/sdk_log/sdk_log.log");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not enable NetSDK log.");
+        }
+    }
+
+    /// <summary>
+    /// Tries the modern secure login first, then the legacy LoginEx2. Older / OEM firmware sometimes
+    /// times out on the high-security handshake but accepts the legacy login. Returns Zero on failure.
+    /// </summary>
+    private IntPtr TryLogin(out string method, out string? error)
+    {
+        lock (_sdkLock)
+        {
+            var devInfo = new NET_DEVICEINFO_Ex();
+            var id = NETClient.LoginWithHighLevelSecurity(
+                _opt.Ip, (ushort)_opt.Port, _opt.Username, _opt.Password,
+                EM_LOGIN_SPAC_CAP_TYPE.TCP, IntPtr.Zero, ref devInfo);
+            if (id != IntPtr.Zero) { method = "HighLevelSecurity"; error = null; return id; }
+            var highLevelErr = NETClient.GetLastError();
+
+            devInfo = new NET_DEVICEINFO_Ex();
+            id = NETClient.Login(
+                _opt.Ip, (ushort)_opt.Port, _opt.Username, _opt.Password,
+                EM_LOGIN_SPAC_CAP_TYPE.TCP, IntPtr.Zero, ref devInfo);
+            if (id != IntPtr.Zero) { method = "LoginEx2 (legacy)"; error = null; return id; }
+            var legacyErr = NETClient.GetLastError();
+
+            method = "none";
+            error = $"high-level: {highLevelErr} | legacy: {legacyErr}";
+            return IntPtr.Zero;
         }
     }
 
