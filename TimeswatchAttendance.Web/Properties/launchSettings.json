@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemas.microsoft.com/launchsettings.json",
+  "profiles": {
+    "TimeswatchAttendance.Web": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
