@@ -20,6 +20,7 @@ public sealed class ZkAttendanceService : BackgroundService
     private readonly ILogger<ZkAttendanceService> _logger;
 
     private DateTime _watermark = DateTime.MinValue;
+    private (bool tcp, int port)? _working;   // remembers the transport/port that connected
 
     public ZkAttendanceService(
         IOptions<BiometricDeviceOptions> opt,
@@ -62,17 +63,18 @@ public sealed class ZkAttendanceService : BackgroundService
 
     private async Task PollOnceAsync(CancellationToken ct)
     {
-        var zk = new ZkTeco(_opt.Ip, _opt.Port, _opt.UseTcp);
+        var zk = OpenConnection();
+        if (zk is null)
+        {
+            _state.Online = false;
+            _state.LastError = $"Could not connect to {_opt.Ip} (tried TCP/UDP on {_opt.Port} and 4370). " +
+                               "If the device has a Comm Key/password set in its menu, put that number in BiometricDevice.Password.";
+            _logger.LogWarning("ZK connect failed at {Ip} (tried TCP/UDP on {Port} and 4370). Check the device Comm Key.",
+                _opt.Ip, _opt.Port);
+            return;
+        }
         try
         {
-            if (!zk.Connect(_opt.Password))
-            {
-                _state.Online = false;
-                _state.LastError = $"Could not connect to {_opt.Ip}:{_opt.Port}";
-                _logger.LogWarning("ZK connect failed at {Ip}:{Port}.", _opt.Ip, _opt.Port);
-                return;
-            }
-
             _state.Online = true;
             _state.LastError = null;
             try { _state.SerialNo = zk.GetDeviceSerial(); _state.Firmware = zk.GetFirmwareVersion(); }
@@ -125,6 +127,45 @@ public sealed class ZkAttendanceService : BackgroundService
         {
             try { zk.Disconnect(); } catch { /* ignore */ }
         }
+    }
+
+    /// <summary>
+    /// Opens a connection, trying the transport/port that worked last, then the configured one,
+    /// then the other transport, then the ZK default port 4370 (TCP and UDP). Returns null if none work.
+    /// </summary>
+    private ZkTeco? OpenConnection()
+    {
+        foreach (var (tcp, port) in BuildAttempts())
+        {
+            var zk = new ZkTeco(_opt.Ip, port, tcp);
+            bool ok;
+            try { ok = zk.Connect(_opt.Password); }
+            catch { ok = false; }
+
+            if (ok)
+            {
+                if (_working is null || _working.Value.tcp != tcp || _working.Value.port != port)
+                    _logger.LogInformation("Connected to device via {Transport} {Ip}:{Port}.", tcp ? "TCP" : "UDP", _opt.Ip, port);
+                _working = (tcp, port);
+                return zk;
+            }
+
+            try { zk.Disconnect(); } catch { /* ignore */ }
+        }
+        return null;
+    }
+
+    private IEnumerable<(bool tcp, int port)> BuildAttempts()
+    {
+        var list = new List<(bool tcp, int port)>();
+        void Add(bool tcp, int port) { if (!list.Contains((tcp, port))) list.Add((tcp, port)); }
+
+        if (_working is { } w) Add(w.tcp, w.port);   // stick with what worked last
+        Add(_opt.UseTcp, _opt.Port);                 // configured
+        Add(!_opt.UseTcp, _opt.Port);                // other transport, same port
+        Add(true, 4370);                             // ZK default port, TCP
+        Add(false, 4370);                            // ZK default port, UDP
+        return list;
     }
 
     private async Task<DateTime> GetLatestStoredTimestampAsync(CancellationToken ct)
