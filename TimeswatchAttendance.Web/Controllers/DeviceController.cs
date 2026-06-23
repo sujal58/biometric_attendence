@@ -7,11 +7,11 @@ namespace TimeswatchAttendance.Web.Controllers;
 [Route("api/device")]
 public class DeviceController : ControllerBase
 {
-    private readonly DahuaDeviceService _device;
+    private readonly ZkAttendanceService _device;
 
-    public DeviceController(DahuaDeviceService device) => _device = device;
+    public DeviceController(ZkAttendanceService device) => _device = device;
 
-    /// <summary>Connectivity proof: online flag, serial number, software version, live door state.</summary>
+    /// <summary>Connectivity proof: online flag, serial number, firmware, punches imported.</summary>
     [HttpGet("status")]
     public ActionResult<DeviceStatusDto> GetStatus() => _device.GetStatus();
 }

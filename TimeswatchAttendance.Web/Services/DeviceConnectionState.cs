@@ -1,18 +1,18 @@
 namespace TimeswatchAttendance.Web.Services;
 
 /// <summary>
-/// Shared singleton holding the live connection status of the device, written by
-/// <see cref="DahuaDeviceService"/> and read by the status API.
+/// Shared singleton holding the live status of the device, written by
+/// <see cref="ZkAttendanceService"/> and read by the status API.
 /// </summary>
 public sealed class DeviceConnectionState
 {
     public volatile bool Online;
     public string? SerialNo;
-    public string? SoftwareVersion;
+    public string? Firmware;
     public string? LastError;
     public DateTime? LastEventUtc;
 
-    /// <summary>Total punches captured this process lifetime (updated via Interlocked).</summary>
+    /// <summary>Total punches imported this process lifetime (updated via Interlocked).</summary>
     public long PunchesCaptured;
 }
 
@@ -20,8 +20,7 @@ public sealed class DeviceConnectionState
 public sealed record DeviceStatusDto(
     bool Online,
     string? SerialNo,
-    string? SoftwareVersion,
-    string DoorState,
+    string? Firmware,
     long PunchesCaptured,
     DateTime? LastEventUtc,
     string? LastError);

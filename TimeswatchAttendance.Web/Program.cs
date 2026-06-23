@@ -17,16 +17,16 @@ var connectionString = builder.Configuration.GetConnectionString("AttendanceDb")
 builder.Services.AddDbContext<AttendanceDbContext>(opt =>
     opt.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 36))));
 
-// One NetSDK session for the whole process: register as a singleton AND as the hosted service
+// One ZK poller for the whole process: registered as a singleton AND as the hosted service
 // so controllers can read live status from the same instance.
 builder.Services.AddSingleton<DeviceConnectionState>();
-builder.Services.AddSingleton<DahuaDeviceService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<DahuaDeviceService>());
+builder.Services.AddSingleton<ZkAttendanceService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ZkAttendanceService>());
 
 var app = builder.Build();
 
-// Simple bootstrap of the attendance schema. Swap for EF Core migrations once the .NET SDK is
-// installed:  dotnet ef migrations add Initial  &&  dotnet ef database update
+// Simple bootstrap of the attendance schema. Swap for EF Core migrations once you want versioning:
+//   dotnet ef migrations add Initial  &&  dotnet ef database update
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AttendanceDbContext>();
@@ -41,8 +41,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGet("/", () => Results.Content(
-    "Timeswatch Bio-27 integration is running.\n" +
-    "  GET /api/device/status   - connectivity, serial, version, door state\n" +
+    "Timeswatch Bio-27 (ZKTeco) integration is running.\n" +
+    "  GET /api/device/status   - connectivity, serial, firmware, punches imported\n" +
     "  GET /api/attendance       - recent punches (optional ?date=yyyy-MM-dd&take=100)\n",
     "text/plain"));
 

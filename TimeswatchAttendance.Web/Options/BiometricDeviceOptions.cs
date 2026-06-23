@@ -1,7 +1,7 @@
 namespace TimeswatchAttendance.Web.Options;
 
 /// <summary>
-/// Connection settings for the Timeswatch Bio-27 (Dahua NetSDK) device.
+/// Connection settings for the Timeswatch Bio-27 (ZKTeco protocol).
 /// Bound from the "BiometricDevice" section of appsettings.json.
 /// </summary>
 public sealed class BiometricDeviceOptions
@@ -11,13 +11,15 @@ public sealed class BiometricDeviceOptions
     /// <summary>Device IP address on the LAN.</summary>
     public string Ip { get; set; } = "";
 
-    /// <summary>Dahua SDK TCP port (default 37777).</summary>
-    public int Port { get; set; } = 37777;
+    /// <summary>ZKTeco comm/SDK port. Default for ZK is 4370; this device is set to 5005.</summary>
+    public int Port { get; set; } = 5005;
 
-    public string Username { get; set; } = "admin";
+    /// <summary>ZKTeco comm key / device password (0 = none).</summary>
+    public int Password { get; set; } = 0;
 
-    public string Password { get; set; } = "";
+    /// <summary>Use TCP (true) or UDP (false). TCP is the norm.</summary>
+    public bool UseTcp { get; set; } = true;
 
-    /// <summary>How long to wait between login attempts while the device is unreachable.</summary>
-    public int LoginRetrySeconds { get; set; } = 15;
+    /// <summary>How often to poll the device for new punches, in seconds.</summary>
+    public int PollSeconds { get; set; } = 5;
 }
